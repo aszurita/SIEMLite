@@ -1,19 +1,12 @@
 #ifndef DASHBOARD_H
 #define DASHBOARD_H
-#include <stdio.h>
-typedef struct
-{
-    int emerg;
-    int alert;
-    int crit;
-    int err;
-    int warning;
-    int notice;
-    int info;
-    int debug;
+
+typedef struct {
+    int emerg, alert, crit, err, warning, notice, info, debug;
 } Estadisticas;
 
-void analizar_logs(FILE *fp, Estadisticas *est, char logs[8][10][1024], int counts[8]);
-void enviar_alerta(const char *servicio, int total_alertas);
+void enviar_alerta(const char *servicio, int total);
+void analizar_logs(FILE *fp, Estadisticas *est);
+void obtener_logs_formateados(FILE *fp, char logs[10][1024], int *count);
 
 #endif
