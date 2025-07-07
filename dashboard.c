@@ -15,7 +15,7 @@ void enviar_alerta(const char *servicio, int total)
     const char *account_sid = "ACe6e033c1ba04ca9b69925eea526f2972";
     const char *auth_token = "ccaebea261491bf011a4aa320d753c8d";
     const char *from_whatsapp_number = "whatsapp:+14155238886";
-    const char *to_whatsapp_number   = "whatsapp:+5939888035770";
+    const char *to_whatsapp_number   = "whatsapp:+593988035770";
     
     CURL *curl;
     CURLcode res;

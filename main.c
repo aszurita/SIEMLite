@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
                     mostrar_logs(servicios[i], nombres[p], logs[p], counts[p]);
                 }
                 int total_alertas = est.emerg + est.alert + est.crit + est.err + est.warning + est.notice + est.info + est.debug;
-                if (total_alertas > THRESHOLD)
+                if (total_alertas >= THRESHOLD)
                 {
                     enviar_alerta(servicios[i], total_alertas);
                 }
