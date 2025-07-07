@@ -4,10 +4,10 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <time.h>
+#include <errno.h>
 #include "dashboard.h"
 
 #define MAX_SERVICIOS 10
-#define INTERVALO 60
 #define THRESHOLD_ALERTAS 3
 
 void mostrar_logs(const char *servicio, const char *prioridad, char logs[10][1024], int count)
@@ -23,18 +23,49 @@ void mostrar_logs(const char *servicio, const char *prioridad, char logs[10][102
 
 int main(int argc, char *argv[])
 {
-    if (argc < 2)
+    /*Por defecto cada minuto*/
+    int tiempo_intervalo = 60; 
+    int opt;
+
+    while ((opt = getopt(argc, argv, "t:")) != -1)
     {
-        fprintf(stderr, "Uso: %s servicio1 servicio2 ...\n", argv[0]);
+        switch (opt)
+        {
+            case 't':
+            {
+                char *endptr;
+                errno = 0; 
+                long temp = strtol(optarg, &endptr, 10);
+        
+                if (errno != 0 || *endptr != '\0' || temp <= 0)
+                {
+                    fprintf(stderr, "Error: Intervalo inválido '%s'. Debe ser un número entero positivo.\n", optarg);
+                    return 1;
+                }
+        
+                tiempo_intervalo = (int)temp;
+                break;
+            }
+        default:
+            fprintf(stderr, "Uso: %s [-t] servicio1 servicio2 ...\n", argv[0]);
+            printf("Opciones:\n");
+            printf(" -t\tPermite pasar el tiempo de actualización de la información en segundos\n");
+            printf("En caso de no pasar ninguna opción el tiempo por defecto es 60 segundos\n");
+            return 1;
+        }
+    }
+
+    int num_servicios = argc - optind;
+    if (num_servicios < 2)
+    {
+        fprintf(stderr, "Debes especificar al menos 2 servicios a monitorear.\n");
         return 1;
     }
 
-    int num_servicios = argc - 1;
     char *servicios[MAX_SERVICIOS];
-
     for (int i = 0; i < num_servicios; i++)
     {
-        servicios[i] = argv[i + 1];
+        servicios[i] = argv[optind + i];
     }
 
     while (1)
@@ -42,7 +73,7 @@ int main(int argc, char *argv[])
         time_t t = time(NULL);
         struct tm *tm = localtime(&t);
         printf("\n--- DASHBOARD SIEMLite (%ds) --- %02d/%02d/%04d %02d:%02d:%02d ---\n",
-               INTERVALO, tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900,
+                tiempo_intervalo, tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900,
                tm->tm_hour, tm->tm_min, tm->tm_sec);
         printf("%-12s EMERG ALERT CRIT ERR WARN NOTICE INFO DEBUG\n", "Servicio");
         printf("--------------------------------------------------------------\n");
@@ -59,15 +90,14 @@ int main(int argc, char *argv[])
                 close(pipefd[0]);
                 close(pipefd[1]);
 
-                char intervalo[16];
-                snprintf(intervalo, sizeof(intervalo), "-%d", INTERVALO);
-
+                char intervalo_string[15];
+                snprintf(intervalo_string, sizeof(intervalo_string), "-%d",tiempo_intervalo);
 
                 execlp("journalctl", "journalctl",
                         "-u", servicios[i],
-                        "--since", intervalo,
+                        "--since", intervalo_string,
                         "--no-pager",
-                        "-o", "export", // <-- clave para ver PRIORITY
+                        "-o", "export",
                         (char *)NULL);
                 perror("execlp");
                 exit(1);
@@ -107,7 +137,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        sleep(INTERVALO);
+        sleep(tiempo_intervalo);
     }
 
     return 0;
