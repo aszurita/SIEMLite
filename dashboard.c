@@ -4,59 +4,68 @@
 #include <ctype.h>
 #include "dashboard.h"
 
-#define INTERVALO_ACTUALIZACION 60
-
-void ejecutar_journalctl(const char *servicio, Estadisticas *est)
+void enviar_alerta(const char *servicio, int total)
 {
-  char comando[256];
-  snprintf(comando, sizeof(comando),
-           "journalctl -u %s.service --since '-%d seconds' --no-pager",
-           servicio, INTERVALO_ACTUALIZACION);
+  printf(">>> ALERTA: Servicio %s tuvo %d eventos críticos.\n", servicio, total);
+}
 
-  FILE *fp = popen(comando, "r");
-  if (!fp)
-  {
-    perror("popen");
-    exit(1);
-  }
-
+void analizar_logs(FILE *fp, Estadisticas *est, char logs[8][10][1024], int counts[8])
+{
   char linea[1024];
   while (fgets(linea, sizeof(linea), fp))
   {
-    // Convertir a minúsculas para comparación más robusta
-    char linea_lower[1024];
-    strcpy(linea_lower, linea);
-    for (int i = 0; linea_lower[i]; i++)
+    char temp[1024];
+    strcpy(temp, linea);
+    for (int i = 0; temp[i]; i++)
+      temp[i] = tolower(temp[i]);
+
+    if (strstr(temp, "emerg"))
     {
-      linea_lower[i] = tolower(linea_lower[i]);
-    }
-
-    // Detectar todos los niveles de prioridad
-    if (strstr(linea_lower, "emerg") || strstr(linea_lower, "emergency"))
       est->emerg++;
-    else if (strstr(linea_lower, "alert"))
+      if (counts[0] < 10)
+        strcpy(logs[0][counts[0]++], linea);
+    }
+    else if (strstr(temp, "alert"))
+    {
       est->alert++;
-    else if (strstr(linea_lower, "crit") || strstr(linea_lower, "critical"))
+      if (counts[1] < 10)
+        strcpy(logs[1][counts[1]++], linea);
+    }
+    else if (strstr(temp, "crit"))
+    {
       est->crit++;
-    else if (strstr(linea_lower, "err") || strstr(linea_lower, "error"))
+      if (counts[2] < 10)
+        strcpy(logs[2][counts[2]++], linea);
+    }
+    else if (strstr(temp, "err"))
+    {
       est->err++;
-    else if (strstr(linea_lower, "warn") || strstr(linea_lower, "warning"))
+      if (counts[3] < 10)
+        strcpy(logs[3][counts[3]++], linea);
+    }
+    else if (strstr(temp, "warn"))
+    {
       est->warning++;
-    else if (strstr(linea_lower, "notice"))
+      if (counts[4] < 10)
+        strcpy(logs[4][counts[4]++], linea);
+    }
+    else if (strstr(temp, "notice"))
+    {
       est->notice++;
-    else if (strstr(linea_lower, "info"))
+      if (counts[5] < 10)
+        strcpy(logs[5][counts[5]++], linea);
+    }
+    else if (strstr(temp, "info"))
+    {
       est->info++;
-    else if (strstr(linea_lower, "debug"))
+      if (counts[6] < 10)
+        strcpy(logs[6][counts[6]++], linea);
+    }
+    else if (strstr(temp, "debug"))
+    {
       est->debug++;
+      if (counts[7] < 10)
+        strcpy(logs[7][counts[7]++], linea);
+    }
   }
-  pclose(fp);
-}
-
-void enviar_alerta(const char *servicio, int alertas)
-{
-  char mensaje[256];
-  snprintf(mensaje, sizeof(mensaje),
-           "./enviar_alerta.py '¡ALERTA! %s tuvo %d alertas en %ds'",
-           servicio, alertas, INTERVALO_ACTUALIZACION);
-  system(mensaje);
 }

@@ -2,20 +2,31 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/types.h>
 #include <sys/wait.h>
+#include <time.h>
 #include "dashboard.h"
 
 #define MAX_SERVICIOS 10
-#define INTERVALO_ACTUALIZACION 5
+#define INTERVALO 60
 #define THRESHOLD_ALERTAS 3
+
+void mostrar_logs(const char *servicio, const char *prioridad, char logs[10][1024], int count)
+{
+    if (count == 0)
+        return;
+    printf("> %s | %s:\n", servicio, prioridad);
+    for (int i = 0; i < count; i++)
+    {
+        printf("  - %s", logs[i]);
+    }
+}
 
 int main(int argc, char *argv[])
 {
     if (argc < 2)
     {
-        printf("Uso: %s servicio1 servicio2 ...\n", argv[0]);
-        exit(1);
+        fprintf(stderr, "Uso: %s servicio1 servicio2 ...\n", argv[0]);
+        return 1;
     }
 
     int num_servicios = argc - 1;
@@ -28,7 +39,13 @@ int main(int argc, char *argv[])
 
     while (1)
     {
-        printf("====== DASHBOARD (%ds) ======\n", INTERVALO_ACTUALIZACION);
+        time_t t = time(NULL);
+        struct tm *tm = localtime(&t);
+        printf("\n--- DASHBOARD SIEMLite (%ds) --- %02d/%02d/%04d %02d:%02d:%02d ---\n",
+               INTERVALO, tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900,
+               tm->tm_hour, tm->tm_min, tm->tm_sec);
+        printf("%-12s EMERG ALERT CRIT ERR WARN NOTICE INFO DEBUG\n", "Servicio");
+        printf("--------------------------------------------------------------\n");
 
         for (int i = 0; i < num_servicios; i++)
         {
@@ -38,42 +55,57 @@ int main(int argc, char *argv[])
 
             if (pid == 0)
             {
+                dup2(pipefd[1], STDOUT_FILENO);
                 close(pipefd[0]);
-                Estadisticas est = {0, 0, 0, 0, 0, 0, 0, 0};
-                ejecutar_journalctl(servicios[i], &est);
-                write(pipefd[1], &est, sizeof(est));
                 close(pipefd[1]);
-                exit(0);
+
+                char intervalo[16];
+                snprintf(intervalo, sizeof(intervalo), "-%d", INTERVALO);
+
+                execlp("journalctl", "journalctl",
+                       "-u", servicios[i],
+                       "--since", intervalo,
+                       "--no-pager",
+                       (char *)NULL);
+                perror("execlp");
+                exit(1);
             }
             else
             {
                 close(pipefd[1]);
-                Estadisticas est;
-                read(pipefd[0], &est, sizeof(est));
-                close(pipefd[0]);
+                FILE *fp = fdopen(pipefd[0], "r");
+                if (!fp)
+                {
+                    perror("fdopen");
+                    continue;
+                }
+
+                Estadisticas est = {0};
+                char logs[8][10][1024];
+                int counts[8] = {0};
+
+                analizar_logs(fp, &est, logs, counts);
+                fclose(fp);
                 wait(NULL);
 
-                printf("Servicio: %s\n", servicios[i]);
-                printf("[EMERG] %d\n", est.emerg);
-                printf("[ALERT] %d\n", est.alert);
-                printf("[CRIT ] %d\n", est.crit);
-                printf("[ERR  ] %d\n", est.err);
-                printf("[WARN ] %d\n", est.warning);
-                printf("[NOTIC] %d\n", est.notice);
-                printf("[INFO ] %d\n", est.info);
-                printf("[DEBUG] %d\n", est.debug);
-                printf("------------------------\n");
+                printf("%-12s %5d %5d %4d %3d %4d %6d %4d %5d\n", servicios[i],
+                       est.emerg, est.alert, est.crit, est.err,
+                       est.warning, est.notice, est.info, est.debug);
 
-                // Alerta si hay emergencias, alertas o críticos
-                if (est.emerg > 0 || est.alert >= THRESHOLD_ALERTAS || est.crit > 0)
+                const char *nombres[] = {"emerg", "alert", "crit", "err", "warn", "notice", "info", "debug"};
+                for (int p = 0; p < 8; p++)
                 {
-                    enviar_alerta(servicios[i], est.alert + est.emerg + est.crit);
+                    mostrar_logs(servicios[i], nombres[p], logs[p], counts[p]);
+                }
+
+                if (est.emerg || est.alert + est.crit > THRESHOLD_ALERTAS)
+                {
+                    enviar_alerta(servicios[i], est.emerg + est.alert + est.crit);
                 }
             }
         }
 
-        printf("==============================\n");
-        sleep(INTERVALO_ACTUALIZACION);
+        sleep(INTERVALO);
     }
 
     return 0;
