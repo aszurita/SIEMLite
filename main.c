@@ -8,7 +8,7 @@
 #include "dashboard.h"
 
 #define MAX_SERVICIOS 10
-#define THRESHOLD_ALERTAS 3
+#define THRESHOLD 3
 
 void mostrar_logs(const char *servicio, const char *prioridad, char logs[10][1024], int count)
 {
@@ -24,28 +24,28 @@ void mostrar_logs(const char *servicio, const char *prioridad, char logs[10][102
 int main(int argc, char *argv[])
 {
     /*Por defecto cada minuto*/
-    int tiempo_intervalo = 60; 
+    int tiempo_intervalo = 60;
     int opt;
 
     while ((opt = getopt(argc, argv, "t:")) != -1)
     {
         switch (opt)
         {
-            case 't':
+        case 't':
+        {
+            char *endptr;
+            errno = 0;
+            long temp = strtol(optarg, &endptr, 10);
+
+            if (errno != 0 || *endptr != '\0' || temp <= 0)
             {
-                char *endptr;
-                errno = 0; 
-                long temp = strtol(optarg, &endptr, 10);
-        
-                if (errno != 0 || *endptr != '\0' || temp <= 0)
-                {
-                    fprintf(stderr, "Error: Intervalo inválido '%s'. Debe ser un número entero positivo.\n", optarg);
-                    return 1;
-                }
-        
-                tiempo_intervalo = (int)temp;
-                break;
+                fprintf(stderr, "Error: Intervalo inválido '%s'. Debe ser un número entero positivo.\n", optarg);
+                return 1;
             }
+
+            tiempo_intervalo = (int)temp;
+            break;
+        }
         default:
             fprintf(stderr, "Uso: %s [-t] servicio1 servicio2 ...\n", argv[0]);
             printf("Opciones:\n");
@@ -73,8 +73,7 @@ int main(int argc, char *argv[])
         time_t t = time(NULL);
         struct tm *tm = localtime(&t);
         printf("\n--- DASHBOARD SIEMLite (%ds) --- %02d/%02d/%04d %02d:%02d:%02d ---\n",
-                tiempo_intervalo, tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900,
-               tm->tm_hour, tm->tm_min, tm->tm_sec);
+               tiempo_intervalo, tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900, tm->tm_hour, tm->tm_min, tm->tm_sec);
         printf("%-12s EMERG ALERT CRIT ERR WARN NOTICE INFO DEBUG\n", "Servicio");
         printf("--------------------------------------------------------------\n");
 
@@ -91,14 +90,14 @@ int main(int argc, char *argv[])
                 close(pipefd[1]);
 
                 char intervalo_string[15];
-                snprintf(intervalo_string, sizeof(intervalo_string), "-%d",tiempo_intervalo);
+                snprintf(intervalo_string, sizeof(intervalo_string), "-%d", tiempo_intervalo);
 
                 execlp("journalctl", "journalctl",
-                        "-u", servicios[i],
-                        "--since", intervalo_string,
-                        "--no-pager",
-                        "-o", "export",
-                        (char *)NULL);
+                       "-u", servicios[i],
+                       "--since", intervalo_string,
+                       "--no-pager",
+                       "-o", "export",
+                       (char *)NULL);
                 perror("execlp");
                 exit(1);
             }
@@ -121,18 +120,17 @@ int main(int argc, char *argv[])
                 wait(NULL);
 
                 printf("%-12s %5d %5d %4d %3d %4d %6d %4d %5d\n", servicios[i],
-                       est.emerg, est.alert, est.crit, est.err,
-                       est.warning, est.notice, est.info, est.debug);
+                       est.emerg, est.alert, est.crit, est.err, est.warning, est.notice, est.info, est.debug);
 
                 const char *nombres[] = {"emerg", "alert", "crit", "err", "warn", "notice", "info", "debug"};
                 for (int p = 0; p < 8; p++)
                 {
                     mostrar_logs(servicios[i], nombres[p], logs[p], counts[p]);
                 }
-
-                if (est.emerg || est.alert + est.crit > THRESHOLD_ALERTAS)
+                int total_alertas = est.emerg + est.alert + est.crit + est.err + est.warning + est.notice + est.info + est.debug;
+                if (total_alertas > THRESHOLD)
                 {
-                    enviar_alerta(servicios[i], est.emerg + est.alert + est.crit);
+                    enviar_alerta(servicios[i], total_alertas);
                 }
             }
         }
