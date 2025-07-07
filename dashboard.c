@@ -12,60 +12,31 @@ void enviar_alerta(const char *servicio, int total)
 void analizar_logs(FILE *fp, Estadisticas *est, char logs[8][10][1024], int counts[8])
 {
   char linea[1024];
+  int prioridad_actual = -1;
+
   while (fgets(linea, sizeof(linea), fp))
   {
-    char temp[1024];
-    strcpy(temp, linea);
-    for (int i = 0; temp[i]; i++)
-      temp[i] = tolower(temp[i]);
-
-    if (strstr(temp, "emerg"))
+    if (strncmp(linea, "PRIORITY=", 9) == 0)
     {
-      est->emerg++;
-      if (counts[0] < 10)
-        strcpy(logs[0][counts[0]++], linea);
+      prioridad_actual = atoi(linea + 9);
+      if (prioridad_actual >= 0 && prioridad_actual <= 7)
+      {
+        int *contador = &est->emerg + prioridad_actual;
+        (*contador)++;
+        if (counts[prioridad_actual] < 10)
+        {
+          logs[prioridad_actual][counts[prioridad_actual]][0] = '\0'; // limpia
+        }
+      }
     }
-    else if (strstr(temp, "alert"))
+    else if (strncmp(linea, "MESSAGE=", 8) == 0 && prioridad_actual >= 0 && prioridad_actual <= 7)
     {
-      est->alert++;
-      if (counts[1] < 10)
-        strcpy(logs[1][counts[1]++], linea);
-    }
-    else if (strstr(temp, "crit"))
-    {
-      est->crit++;
-      if (counts[2] < 10)
-        strcpy(logs[2][counts[2]++], linea);
-    }
-    else if (strstr(temp, "err"))
-    {
-      est->err++;
-      if (counts[3] < 10)
-        strcpy(logs[3][counts[3]++], linea);
-    }
-    else if (strstr(temp, "warn"))
-    {
-      est->warning++;
-      if (counts[4] < 10)
-        strcpy(logs[4][counts[4]++], linea);
-    }
-    else if (strstr(temp, "notice"))
-    {
-      est->notice++;
-      if (counts[5] < 10)
-        strcpy(logs[5][counts[5]++], linea);
-    }
-    else if (strstr(temp, "info"))
-    {
-      est->info++;
-      if (counts[6] < 10)
-        strcpy(logs[6][counts[6]++], linea);
-    }
-    else if (strstr(temp, "debug"))
-    {
-      est->debug++;
-      if (counts[7] < 10)
-        strcpy(logs[7][counts[7]++], linea);
+      if (counts[prioridad_actual] < 10)
+      {
+        strncpy(logs[prioridad_actual][counts[prioridad_actual]], linea + 8, 1023);
+        logs[prioridad_actual][counts[prioridad_actual]][strcspn(logs[prioridad_actual][counts[prioridad_actual]], "\n")] = '\0';
+        counts[prioridad_actual]++;
+      }
     }
   }
 }

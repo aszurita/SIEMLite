@@ -17,7 +17,7 @@ void mostrar_logs(const char *servicio, const char *prioridad, char logs[10][102
     printf("> %s | %s:\n", servicio, prioridad);
     for (int i = 0; i < count; i++)
     {
-        printf("  - %s", logs[i]);
+        printf("  - %s\n", logs[i]);
     }
 }
 
@@ -62,11 +62,13 @@ int main(int argc, char *argv[])
                 char intervalo[16];
                 snprintf(intervalo, sizeof(intervalo), "-%d", INTERVALO);
 
+
                 execlp("journalctl", "journalctl",
-                       "-u", servicios[i],
-                       "--since", intervalo,
-                       "--no-pager",
-                       (char *)NULL);
+                        "-u", servicios[i],
+                        "--since", intervalo,
+                        "--no-pager",
+                        "-o", "export", // <-- clave para ver PRIORITY
+                        (char *)NULL);
                 perror("execlp");
                 exit(1);
             }
