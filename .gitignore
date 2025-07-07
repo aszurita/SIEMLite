@@ -1,0 +1,6 @@
+# Archivos compilados
+*.o
+
+# Ejecutable del proyecto
+programa
+
