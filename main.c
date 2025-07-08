@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
         
         for (int i = 0; i < num_servicios; i++) {
             if (count_legibles[i] > 0) {
-                printf("-> %s [ últimos logs ]:\n", servicios[i]);
+                printf("\n\n-> %s [ últimos logs ]:\n\n", servicios[i]);
                 for (int j = 0; j < count_legibles[i]; j++) {
                     printf("  - %s\n", logs_legibles[i][j]);
                 }
