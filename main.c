@@ -30,11 +30,31 @@ int main(int argc, char *argv[])
         switch (opt)
         {
         case 't':
-            tiempo_intervalo = atoi(optarg);
+        {
+            char *endptr;
+            errno = 0;
+            long temp = strtol(optarg, &endptr, 10);
+            if (errno != 0 || *endptr != '\0' || temp <= 0)
+            {
+                fprintf(stderr, "Error: Intervalo inválido '%s'. Debe ser un número entero positivo.\n", optarg);
+                return 1;
+            }
+            tiempo_intervalo = (int)temp;
             break;
+        }
         case 'u':
-            threshold = atoi(optarg);
+        {
+            char *endptr;
+            errno = 0;
+            long temp = strtol(optarg, &endptr, 10);
+            if (errno != 0 || *endptr != '\0' || temp <= 0)
+            {
+                fprintf(stderr, "Error: Umbral inválido '%s'. Debe ser un número entero positivo.\n", optarg);
+                return 1;
+            }
+            threshold = (int)temp;
             break;
+        }
         case 'h':
             printHelp(stdout, argv[0]);
             return 0;
@@ -64,27 +84,26 @@ int main(int argc, char *argv[])
         printf("\n--- DASHBOARD SIEMLite (%ds) --- %02d/%02d/%04d %02d:%02d:%02d ---\n",
                tiempo_intervalo, tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900,
                tm->tm_hour, tm->tm_min, tm->tm_sec);
-        printf("%-12s EMERG ALERT CRIT ERR WARN NOTICE INFO DEBUG\n", "Servicio");
+        printf("%-22s EMERG ALERT CRIT ERR WARN NOTICE INFO DEBUG\n", "Servicio");
         printf("--------------------------------------------------------------\n");
 
-        for (int i = 0; i < num_servicios; i++)
+        Estadisticas est[MAX_SERVICIOS] = {0};
+        char logs_legibles[MAX_SERVICIOS][10][1024] = {{{0}}};
+        int count_legibles[MAX_SERVICIOS] = {0};
+        
+        for (int i = 0; i < num_servicios; i++) 
         {
-            Estadisticas est = {0};
-            char logs_legibles[10][1024] = {{0}};
-            int count_legibles = 0;
-
-            // 1. Hijo para analizar PRIORITY
             {
                 int pipefd[2]; pipe(pipefd);
                 pid_t pid = fork();
-
+        
                 if (pid == 0) {
                     dup2(pipefd[1], STDOUT_FILENO);
                     close(pipefd[0]); close(pipefd[1]);
-
+        
                     char intervalo_string[16];
                     snprintf(intervalo_string, sizeof(intervalo_string), "-%d", tiempo_intervalo);
-
+        
                     execlp("journalctl", "journalctl",
                            "-u", servicios[i],
                            "--since", intervalo_string,
@@ -97,24 +116,23 @@ int main(int argc, char *argv[])
                     close(pipefd[1]);
                     FILE *fp = fdopen(pipefd[0], "r");
                     if (!fp) { perror("fdopen"); continue; }
-                    analizar_logs(fp, &est);
+                    analizar_logs(fp, &est[i]);
                     fclose(fp);
                     wait(NULL);
                 }
             }
-
-            // 2. Hijo para mostrar logs legibles
+        
             {
                 int pipefd[2]; pipe(pipefd);
                 pid_t pid = fork();
-
+        
                 if (pid == 0) {
                     dup2(pipefd[1], STDOUT_FILENO);
                     close(pipefd[0]); close(pipefd[1]);
-
+        
                     char intervalo_string[16];
                     snprintf(intervalo_string, sizeof(intervalo_string), "-%d", tiempo_intervalo);
-
+        
                     execlp("journalctl", "journalctl",
                            "-u", servicios[i],
                            "--since", intervalo_string,
@@ -126,35 +144,35 @@ int main(int argc, char *argv[])
                     close(pipefd[1]);
                     FILE *fp = fdopen(pipefd[0], "r");
                     if (!fp) { perror("fdopen"); continue; }
-                    obtener_logs_formateados(fp, logs_legibles, &count_legibles);
+                    obtener_logs_formateados(fp, logs_legibles[i], &count_legibles[i]);
                     fclose(fp);
                     wait(NULL);
                 }
             }
-
-            // Mostrar resumen por prioridad
-            printf("%-12s %5d %5d %4d %3d %4d %6d %4d %5d\n", servicios[i],
-                   est.emerg, est.alert, est.crit, est.err, est.warning,
-                   est.notice, est.info, est.debug);
-
-            // Mostrar logs legibles
-            if (count_legibles > 0) {
+        }
+        
+        for (int i = 0; i < num_servicios; i++) {
+            printf("%-22s %5d %5d %4d %3d %4d %6d %4d %5d\n", servicios[i],
+                   est[i].emerg, est[i].alert, est[i].crit, est[i].err, est[i].warning,
+                   est[i].notice, est[i].info, est[i].debug);
+        }
+        
+        for (int i = 0; i < num_servicios; i++) {
+            if (count_legibles[i] > 0) {
                 printf("-> %s [ últimos logs ]:\n", servicios[i]);
-                for (int j = 0; j < count_legibles; j++) {
-                    printf("  - %s\n", logs_legibles[j]);
+                for (int j = 0; j < count_legibles[i]; j++) {
+                    printf("  - %s\n", logs_legibles[i][j]);
                 }
             }
-
-            int total = est.emerg + est.alert + est.crit + est.err + est.warning +
-                        est.notice + est.info + est.debug;
-
+        
+            int total = est[i].emerg + est[i].alert + est[i].crit + est[i].err +
+                        est[i].warning + est[i].notice + est[i].info + est[i].debug;
+        
             if (total >= threshold) {
                 enviar_alerta(servicios[i], total);
             }
         }
-
         sleep(tiempo_intervalo);
-    }
+    }    
 
-    return 0;
-}
+}    
