@@ -8,26 +8,35 @@
 #include "dashboard.h"
 
 #define MAX_SERVICIOS 10
-#define THRESHOLD 50
 
 void mostrar_logs(const char *servicio, const char *prioridad, char logs[10][1024], int count)
 {
     if (count == 0)
         return;
-    printf("> %s | %s:\n", servicio, prioridad);
+    printf("-> %s [ %s ]:\n", servicio, prioridad);
     for (int i = 0; i < count; i++)
     {
         printf("  - %s\n", logs[i]);
     }
+}
+void printHelp(FILE *stream, const char *programa)
+{
+    fprintf(stream, "Uso: %s [-t intervalo] [-u threshold] servicio1 servicio2 ...\n", programa);
+    fprintf(stream, "Opciones:\n");
+    fprintf(stream, " -t	Permite pasar el tiempo de actualización de la información en segundos\n");
+    fprintf(stream, " -u	Permite indicar un threshold para alertas\n");
+    fprintf(stream, " -h	Muestra ayuda\n");
+    fprintf(stream, "En caso de no pasar ninguna opción el tiempo por defecto es 60 segundos y el threshold es 5.\n");
 }
 
 int main(int argc, char *argv[])
 {
     /*Por defecto cada minuto*/
     int tiempo_intervalo = 60;
+    int threshold = 50;
     int opt;
 
-    while ((opt = getopt(argc, argv, "t:")) != -1)
+    while ((opt = getopt(argc, argv, "t:u:h")) != -1)
     {
         switch (opt)
         {
@@ -36,21 +45,32 @@ int main(int argc, char *argv[])
             char *endptr;
             errno = 0;
             long temp = strtol(optarg, &endptr, 10);
-
             if (errno != 0 || *endptr != '\0' || temp <= 0)
             {
                 fprintf(stderr, "Error: Intervalo inválido '%s'. Debe ser un número entero positivo.\n", optarg);
                 return 1;
             }
-
             tiempo_intervalo = (int)temp;
             break;
         }
+        case 'u':
+        {
+            char *endptr;
+            errno = 0;
+            long temp = strtol(optarg, &endptr, 10);
+            if (errno != 0 || *endptr != '\0' || temp <= 0)
+            {
+                fprintf(stderr, "Error: Umbral inválido '%s'. Debe ser un número entero positivo.\n", optarg);
+                return 1;
+            }
+            threshold = (int)temp;
+            break;
+        }
+        case 'h':
+            printHelp(stdout, argv[0]);
+            return 0;
         default:
-            fprintf(stderr, "Uso: %s [-t] servicio1 servicio2 ...\n", argv[0]);
-            printf("Opciones:\n");
-            printf(" -t\tPermite pasar el tiempo de actualización de la información en segundos\n");
-            printf("En caso de no pasar ninguna opción el tiempo por defecto es 60 segundos\n");
+            printHelp(stderr, argv[0]);
             return 1;
         }
     }
@@ -128,7 +148,7 @@ int main(int argc, char *argv[])
                     mostrar_logs(servicios[i], nombres[p], logs[p], counts[p]);
                 }
                 int total_alertas = est.emerg + est.alert + est.crit + est.err + est.warning + est.notice + est.info + est.debug;
-                if (total_alertas >= THRESHOLD)
+                if (total_alertas >= threshold)
                 {
                     enviar_alerta(servicios[i], total_alertas);
                 }

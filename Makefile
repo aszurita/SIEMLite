@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2 -c -I.
+CFLAGS = -c -I.
 
 programa: main.o dashboard.o
 	$(CC) -o programa main.o dashboard.o -lcurl

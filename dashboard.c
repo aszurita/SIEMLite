@@ -30,7 +30,7 @@ void enviar_alerta(const char *servicio, int total)
         char *escaped_from = curl_easy_escape(curl, from_whatsapp_number, 0);
 
         char body_text[256];
-        sprintf(body_text, "ALERTA SIEMLite: El servicio '%s' ha generado %d errores críticos.", servicio, total);
+        sprintf(body_text, "\n🚨 ALERTA CRÍTICA 🚨\n\nServicio: %s\nErrores detectados: %d\n\nPor favor, revisa el estado del servicio inmediatamente.\n", servicio, total);
         char *escaped_body = curl_easy_escape(curl, body_text, 0);
 
         char post_data[512];
@@ -56,7 +56,7 @@ void enviar_alerta(const char *servicio, int total)
         } else {
             long http_code = 0;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-            printf("Alerta de WhatsApp enviada. Código de respuesta HTTP: %ld\n", http_code);
+            printf("Alerta de WhatsApp enviada");
         }
 
         curl_easy_cleanup(curl);
@@ -95,7 +95,7 @@ void analizar_logs(FILE *fp, Estadisticas *est, char logs[8][10][1024], int coun
               int *contador = &est->emerg + prioridad_actual;
               (*contador)++;
 
-              snprintf(logs[prioridad_actual][counts[prioridad_actual]++], 1024,
+              snprintf(logs[prioridad_actual][counts[prioridad_actual]++], 2050,
                       "%s %s %s[%s]: %s",
                       timestamp, hostname, ident, pid, mensaje);
           }
