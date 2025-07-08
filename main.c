@@ -8,7 +8,7 @@
 #include "dashboard.h"
 
 #define MAX_SERVICIOS 10
-#define THRESHOLD 3
+#define THRESHOLD 50
 
 void mostrar_logs(const char *servicio, const char *prioridad, char logs[10][1024], int count)
 {
